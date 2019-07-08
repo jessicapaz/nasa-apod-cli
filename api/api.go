@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"time"
 )
 
 // ResponseData response data of the nasa api
@@ -18,30 +19,63 @@ type ResponseData struct {
 	URL         string `json:"url"`
 }
 
+// DateRange range of two dates
+type DateRange struct {
+	Start string
+	End   string
+}
+
+var apiKey = os.Getenv("API_KEY")
+
 // GetAPOD gets the Astronomy Picture of the Day (APOD)
 func GetAPOD(date string) ResponseData {
-	var apiKey = os.Getenv("API_KEY")
 	url := "https://api.nasa.gov/planetary/apod?api_key=" + apiKey
 	if date != "" {
 		url += "&date=" + date
 	}
-
-	client := new(http.Client)
-
-	req, err := http.NewRequest("GET", url, nil)
-	checkError(err)
-	resp, err := client.Do(req)
+	resp, err := http.Get(url)
 	checkError(err)
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	checkError(err)
-	var response ResponseData
-
-	json.Unmarshal(body, &response)
-	return response
+	var res ResponseData
+	err = json.Unmarshal(body, &res)
+	checkError(err)
+	return res
 }
 
-// DownloadImage download a image given a image url
+// GetAPODs gets the Astronomy Picture of the Day (APOD) for a range of dates
+func GetAPODs(dt DateRange) []ResponseData {
+
+	startDt := stringToDate(dt.Start)
+	endDt := stringToDate(dt.End)
+
+	var r []ResponseData
+	for startDt.Before(endDt) == true || startDt == endDt {
+		tmp := startDt.Format("2006-01-02")
+		url := "https://api.nasa.gov/planetary/apod?api_key=" + apiKey
+		url += "&date=" + tmp
+		ch := make(chan []byte)
+		go makeRequest(url, ch)
+		var res ResponseData
+		err := json.Unmarshal(<-ch, &res)
+		checkError(err)
+		r = append(r, res)
+		startDt = startDt.AddDate(0, 0, 1)
+	}
+	return r
+}
+
+func makeRequest(url string, ch chan<- []byte) {
+	resp, err := http.Get(url)
+	checkError(err)
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	checkError(err)
+	ch <- body
+}
+
+// DownloadImage download an image given an url
 func DownloadImage(url string, imgName string) {
 	resp, err := http.Get(url)
 	checkError(err)
@@ -58,4 +92,10 @@ func checkError(err error) {
 			"error": err.Error(),
 		}).Fatal("error")
 	}
+}
+
+func stringToDate(s string) time.Time {
+	layout := "2006-01-02"
+	t, _ := time.Parse(layout, s)
+	return t
 }

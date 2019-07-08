@@ -27,22 +27,41 @@ var nasaCmd = &cobra.Command{
 	Short: "gets Astronomy Picture of the Day",
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
-		data := api.GetAPOD("")
-		date, _ := cmd.Flags().GetString("date")
-		if date != "" {
-			data = api.GetAPOD(date)
-		}
-		fmt.Printf("\nDate: %s\n\nTitle: %s\n\nExplanation: %s\n\nImage URL: %s\n\nCopyright: %s\n", data.Date, data.Title, data.Explanation, data.URL, data.Copyright)
-		downloadImage, _ := cmd.Flags().GetBool("download-image")
-		if downloadImage != false {
-			imageName := "image-" + data.Date
-			api.DownloadImage(data.URL, imageName)
+		start, _ := cmd.Flags().GetString("start")
+		end, _ := cmd.Flags().GetString("end")
+		dImg, _ := cmd.Flags().GetBool("download-image")
+		if start != "" && end != "" {
+			data := api.GetAPODs(api.DateRange{Start: start, End: end})
+			for _, value := range data {
+				printFmtData(value)
+				if dImg != false {
+					downloadImage(value)
+				}
+			}
+		} else {
+			date, _ := cmd.Flags().GetString("date")
+			data := api.GetAPOD(date)
+			printFmtData(data)
+			if dImg != false {
+				downloadImage(data)
+			}
 		}
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(nasaCmd)
-	nasaCmd.Flags().StringP("date", "d", "", "Date of image")
+	nasaCmd.Flags().StringP("date", "d", "", "Image's date")
+	nasaCmd.Flags().StringP("start", "s", "", "Image's start date")
+	nasaCmd.Flags().StringP("end", "e", "", "Image's end date")
 	nasaCmd.Flags().BoolP("download-image", "i", false, "Download the APOD image")
+}
+
+func printFmtData(value api.ResponseData) {
+	fmt.Printf("\nDate: %s\n\nTitle: %s\n\nExplanation: %s\n\nImage URL: %s\n\nCopyright: %s\n", value.Date, value.Title, value.Explanation, value.URL, value.Copyright)
+}
+
+func downloadImage(value api.ResponseData) {
+	imageName := "image-" + value.Date
+	api.DownloadImage(value.URL, imageName)
 }
